@@ -145,7 +145,7 @@ audio_cmdlist = [
 
 gpu_cmdlist = [
     ('PCI Video Card',
-     '''/usr/bin/lspci | /usr/bin/grep -i -E 'vga' | /usr/bin/cut -b1-7 | xargs -i /usr/bin/lspci -vnnks {} | /usr/bin/grep -v "<access denied>"'''
+     '''/usr/bin/lspci | /usr/bin/grep -i -E 'vga' | /usr/bin/cut -b1-7 | /usr/bin/xargs -i /usr/bin/lspci -vnnks {} | /usr/bin/grep -v "<access denied>"'''
      ),
     ('GL Support', '''/usr/bin/glxinfo -B | /usr/bin/grep -E "OpenGL version|OpenGL renderer"'''
      ),
@@ -195,7 +195,7 @@ kernelbuffer_cmdlist = [
 
 net_cmdlist = [
     ('PCI Network devices',
-     '''/usr/bin/lspci | /usr/bin/grep -i -E 'net' | /usr/bin/cut -b1-7 | /usr/bin/xargs -i lspci -vnnks {} | grep -v "<access denied>"'''
+     '''/usr/bin/lspci | /usr/bin/grep -i -E 'net' | /usr/bin/cut -b1-7 | /usr/bin/xargs -i lspci -vnnks {} | /usr/bin/grep -v "<access denied>"'''
      ),
     ('Network status', '''/usr/bin/ip -br addr | /usr/bin/awk '{print $1" " $2}' | /usr/bin/column -t'''
      ),
@@ -1157,8 +1157,9 @@ Usage: %%prog [OPTION]... [FILE]...
         try:
             if is_text(text):
                 # when piped to less, sometimes fails with [Errno 32] Broken
-                # pipe
-                print(text)
+                # pipe. We also avoid mentioning the full path to the binary being used to reduce the text output amount
+                # (marginally!)
+                print(text.replace("/usr/bin/", ""))
             else:
                 print("DATA")
         except IOError:
