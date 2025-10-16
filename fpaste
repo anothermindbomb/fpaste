@@ -17,13 +17,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import argparse
 import os
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 from subprocess import CalledProcessError
 
 VERSION = '0.5.0.1'
@@ -248,7 +248,7 @@ def is_text(text, maxCheck=100, pctPrintable=0.75):
             nprintable += 1
         i += inc
     pct = float(nprintable) / ncheck
-    return (pct >= pctPrintable)
+    return pct >= pctPrintable
 
 
 def confirm(prompt="OK?"):
@@ -310,8 +310,8 @@ def paste(text, options):
     req = urllib.request.Request(
         url=FPASTE_URL,
         data=data.encode('ascii'),
-        headers={
-            'User-agent': USER_AGENT})
+        headers={'User-agent': USER_AGENT}
+    )
     if options.proxy:
         if options.debug:
             print("Using proxy: %s" % options.proxy, file=sys.stderr)
@@ -324,7 +324,7 @@ def paste(text, options):
         if hasattr(e, 'reason'):
             print("Error Uploading: %s" % e.reason, file=sys.stderr)
         elif hasattr(e, 'code'):
-            print("Server Error: %d - %s" % (e.code, e.msg), file=sys.stderr)
+            print("Server Error: %d - %s" % (e.code, e.reason), file=sys.stderr)
             if options.debug:
                 print(f.read())
         return False
@@ -489,6 +489,7 @@ def getinfo(cmdlist, show_stderr=False, show_successful_cmds=True,
     return sistr
 
 
+# This code is never used. Obsolete now, it seems, but it's been commented rather than removed.
 # def summarize_text(text):
 #     # use beginning/middle/end content snippets as a description summary. 120 char limit
 #     # "36chars ... 36chars ... 36chars" == 118 chars
@@ -795,8 +796,7 @@ def main():
         'yaml': 'yaml'
     }
 
-    usage = f"""\
-Usage: %%prog [OPTION]... [FILE]...
+    usage = f"""{sys.argv[0]} [OPTION]... [FILE]...
   Send single or multiple text files, stdin, generated diagnostics or clipboard to the Fedora community pastebin at
   {SERVER_URL} and return the URL.
 
@@ -810,199 +810,80 @@ Usage: %%prog [OPTION]... [FILE]...
   Discussion Forums at {DISCUSSION_URL}.
   
   Examples:
-  %%prog file1.txt file2.txt
-  dmesg | %%prog
-  (prog1; prog2; prog3) | fpaste
-  %%prog --sysinfo --confirm
-  %%prog -t "debug output" -l python foo.py
-  %%prog --disk-info --printonly"""
+  {sys.argv[0]} file1.txt file2.txt
+  dmesg | {sys.argv[0]}
+  (prog1; prog2; prog3) | {sys.argv[0]}
+  {sys.argv[0]} --sysinfo --confirm
+  {sys.argv[0]} -t "debug output" -l python foo.py
+  {sys.argv[0]} --disk-info --printonly"""
 
-    parser = OptionParser(usage=usage, version='%prog ' + VERSION)
-    parser.add_option(
-        '',
-        '--debug',
-        dest='debug',
-        help=SUPPRESS_HELP,
-        action="store_true",
-        default=False)
-    parser.add_option('', '--proxy', dest='proxy', help=SUPPRESS_HELP)
+    parser = argparse.ArgumentParser(usage=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--version', action='version', version=f'{sys.argv[0]} ' + VERSION)
+    parser.add_argument('--debug', dest='debug', help=argparse.SUPPRESS, action='store_true', default=False)
+    parser.add_argument('--proxy', dest='proxy', help=argparse.SUPPRESS)
 
-    # pastebin-specific options first
-    fpasteOrg_group = OptionGroup(parser, f"{SERVER_URL} Options")
-    fpasteOrg_group.add_option(
-        '-t',
-        '--title',
-        dest='title',
-        help='title of paste; defaults to UNTITLED',
-        metavar='"TITLE"')
-    fpasteOrg_group.add_option(
-        '-a',
-        '--author',
-        dest='author',
-        help='author name; empty by default',
-        metavar='"AUTHOR"')
-    fpasteOrg_group.add_option(
-        '-r',
-        '--private',
-        dest='private',
-        help='make paste private; defaults to 1',
-        metavar='PRIVATE')
-    fpasteOrg_group.add_option(
-        '-l',
-        dest='lang',
-        help='language of content for syntax highlighting; default is "%default"; use "list" to show all ' + str(
-            len(validSyntaxOpts)) + ' supported langs',
-        metavar='"LANGUAGE"')
-    fpasteOrg_group.add_option(
-        '-x',
-        dest='life',
-        help='life of paste in minutes; default is 1 day (maximum)',
-        metavar='LIFE')
+    # pastebin-specific options
+    fpasteOrg_group = parser.add_argument_group(f"{SERVER_URL} Options")
+    fpasteOrg_group.add_argument('-t', '--title', dest='title', help='title of paste; defaults to UNTITLED',
+                                 metavar='"TITLE"')
+    fpasteOrg_group.add_argument('-a', '--author', dest='author', help='author name; empty by default',
+                                 metavar='"AUTHOR"')
+    fpasteOrg_group.add_argument('-r', '--private', dest='private', help='make paste private; defaults to 1',
+                                 metavar='PRIVATE')
+    fpasteOrg_group.add_argument('-l', dest='lang',
+                                 help='language of content for syntax highlighting; default is "%(default)s"; use "list" to show all ' + str(
+                                     len(validSyntaxOpts)) + ' supported langs', metavar='"LANGUAGE"')
+    fpasteOrg_group.add_argument('-x', dest='life', help='life of paste in minutes; default is 1 day (maximum)',
+                                 metavar='LIFE')
 
-    parser.add_option_group(fpasteOrg_group)
     # other options
-    fpasteProg_group = OptionGroup(parser, "Input/Output Options")
-    fpasteProg_group.add_option(
-        '-i',
-        '--clipin',
-        dest='clipin',
-        help='read paste text from current X clipboard selection [requires: xsel]',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '-w',
-        '--wayland-clipin',
-        dest='wclipin',
-        help='read paste text from Wayland selection [requires the wl-clipboard package]',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '-o',
-        '--clipout',
-        dest='clipout',
-        help='save returned paste URL to all available clipboards',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--input-selection',
-        dest='selection',
-        help='specify which X clipboard to use. valid options: "primary" (default; middle-mouse-button paste), "secondary" (uncommon), or "clipboard" (ctrl-v paste)',
-        metavar='CLIP')
-    fpasteProg_group.add_option(
-        '',
-        '--fullpath',
-        dest='fullpath',
-        help='use the full pathname VS the basename for file descriptions',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--pasteself',
-        dest='pasteself',
-        help='paste this script itself',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--sysinfo',
-        dest='sysinfo',
-        help='paste system information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--sysinfo-short',
-        dest='sysinfo_short',
-        help='paste shortened system information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--audioinfo',
-        '--sysinfo-audio',
-        dest='audioinfo',
-        help='paste general audio information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--videoinfo',
-        '--sysinfo-video',
-        dest='videoinfo',
-        help='paste general video information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--diskinfo',
-        '--sysinfo-disk',
-        dest='diskinfo',
-        help='paste general disk information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--netinfo',
-        '--sysinfo-net',
-        dest='netinfo',
-        help='paste general network information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--dnfinfo',
-        '--sysinfo-dnf',
-        dest='dnfinfo',
-        help='paste repository and package information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--pci-verbose',
-        '--sysinfo-pci-verbose',
-        dest='pci_verbose_info',
-        help='paste verbose pci information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--usb-verbose',
-        '--sysinfo-usb-verbose',
-        dest='usb_verbose_info',
-        help='paste verbose usb information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--btrfsinfo',
-        '--sysinfo-btrfs',
-        dest='btrfsinfo',
-        help='paste btrfs related system information',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--printonly',
-        dest='printonly',
-        help='print paste, but do not send',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--confirm',
-        dest='confirm',
-        help='print paste, and prompt for confirmation before sending',
-        action="store_true",
-        default=False)
-    fpasteProg_group.add_option(
-        '',
-        '--raw-url',
-        dest='rawurl',
-        help='print raw url',
-        action="store_true",
-        default=False)
-    parser.add_option_group(fpasteProg_group)
+    fpasteProg_group = parser.add_argument_group("Input/Output Options")
+    fpasteProg_group.add_argument('-i', '--clipin', dest='clipin',
+                                  help='read paste text from current X clipboard selection [requires: xsel]',
+                                  action='store_true', default=False)
+    fpasteProg_group.add_argument('-w', '--wayland-clipin', dest='wclipin',
+                                  help='read paste text from Wayland selection [requires the wl-clipboard package]',
+                                  action='store_true', default=False)
+    fpasteProg_group.add_argument('-o', '--clipout', dest='clipout',
+                                  help='save returned paste URL to all available clipboards', action='store_true',
+                                  default=False)
+    fpasteProg_group.add_argument('--input-selection', dest='selection',
+                                  help='specify which X clipboard to use. valid options: "primary" (default; middle-mouse-button paste), "secondary" (uncommon), or "clipboard" (ctrl-v paste)',
+                                  metavar='CLIP')
+    fpasteProg_group.add_argument('--fullpath', dest='fullpath',
+                                  help='use the full pathname VS the basename for file descriptions',
+                                  action='store_true', default=False)
+    fpasteProg_group.add_argument('--pasteself', dest='pasteself', help='paste this script itself', action='store_true',
+                                  default=False)
+    fpasteProg_group.add_argument('--sysinfo', dest='sysinfo', help='paste system information', action='store_true',
+                                  default=False)
+    fpasteProg_group.add_argument('--sysinfo-short', dest='sysinfo_short', help='paste shortened system information',
+                                  action='store_true', default=False)
+    fpasteProg_group.add_argument('--audioinfo', '--sysinfo-audio', dest='audioinfo',
+                                  help='paste general audio information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--videoinfo', '--sysinfo-video', dest='videoinfo',
+                                  help='paste general video information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--diskinfo', '--sysinfo-disk', dest='diskinfo',
+                                  help='paste general disk information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--netinfo', '--sysinfo-net', dest='netinfo',
+                                  help='paste general network information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--dnfinfo', '--sysinfo-dnf', dest='dnfinfo',
+                                  help='paste repository and package information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--pci-verbose', '--sysinfo-pci-verbose', dest='pci_verbose_info',
+                                  help='paste verbose pci information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--usb-verbose', '--sysinfo-usb-verbose', dest='usb_verbose_info',
+                                  help='paste verbose usb information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--btrfsinfo', '--sysinfo-btrfs', dest='btrfsinfo',
+                                  help='paste btrfs related system information', action='store_true', default=False)
+    fpasteProg_group.add_argument('--printonly', dest='printonly', help='print paste, but do not send',
+                                  action='store_true', default=False)
+    fpasteProg_group.add_argument('--confirm', dest='confirm',
+                                  help='print paste, and prompt for confirmation before sending', action='store_true',
+                                  default=False)
+    fpasteProg_group.add_argument('--raw-url', dest='rawurl', help='print raw url', action='store_true', default=False)
+
+    # positional files
+    parser.add_argument('files', nargs='*')
 
     # Let default be anonymous.
     #    p = subprocess.Popen('whoami', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1020,7 +901,9 @@ Usage: %%prog [OPTION]... [FILE]...
         private="1",
         author=""
     )
-    (options, args) = parser.parse_args()
+
+    options = parser.parse_args()
+    args = options.files
 
     if options.lang.lower() == 'list':
         print('Valid language syntax options:')
